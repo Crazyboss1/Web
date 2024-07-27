@@ -1,65 +1,60 @@
-from aiohttp import web
-import aiohttp_jinja2
-import jinja2
-import pymongo
+from flask import Flask, render_template, request, redirect, url_for
+from pymongo import MongoClient
+
+app = Flask(__name__)
 
 DATABASE_URI = "mongodb+srv://SpidySeries:SpidySeries@cluster0.xreosjj.mongodb.net/?retryWrites=true&w=majority"
 
-client = pymongo.MongoClient(DATABASE_URI)
+client = MongoClient(DATABASE_URI)
 db = client['series_database']
 series_collection = db['series']
-links_collection = db['series_links']
 
-app = web.Application()
-aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-
-@aiohttp_jinja2.template('add_season.html')
-async def add_season(request):
+@app.route('/add_edit_series/<series_key>', methods=['GET', 'POST'])
+def add_edit_series(series_key=None):
     if request.method == 'POST':
-        data = await request.post()  # Await the coroutine to get the form data
-        series_key = data['series_key'].strip().lower().replace(' ', '')
-        language = data['language'].strip().lower().replace(' ', '')
-        season = data['season'].strip()
-        quality = data['quality'].strip()
-        link = data['link'].strip()
+        series_data = {
+            'title': request.form['title'],
+            'released_on': request.form.get('released_on', "N/A"),
+            'genre': request.form.get('genre', "N/A"),
+            'rating': request.form.get('rating', "N/A"),
+            'languages': [lang.strip() for lang in request.form.get('languages', "").split(",")],
+            'seasons': {}
+        }
 
-        season_key = f"{series_key}-{language}-{season}"
+        # Add or update series data
+        series_collection.update_one(
+            {'key': series_key},
+            {'$set': series_data},
+            upsert=True
+        )
+        return redirect(url_for('view_series', series_name=series_data['title']))
 
-        # Adding or updating the season
-        season_data = links_collection.find_one({"series_key": season_key})
-        if not season_data:
-            # If season doesn't exist, create it
-            links = {quality: link}
-            links_collection.insert_one({"series_key": season_key, "links": links})
-        else:
-            # Update existing season
-            links = season_data.get('links', {})
-            links[quality] = link
-            links_collection.update_one({"series_key": season_key}, {"$set": {"links": links}})
+    else:
+        # Fetch existing series data for editing
+        series = series_collection.find_one({'key': series_key}) if series_key else {}
+        return render_template('add_edit_series.html', series=series)
 
-        return web.HTTPFound('/add_season')
-    return {}
+@app.route('/add_season/<series_key>', methods=['POST'])
+def add_season(series_key):
+    season_name = request.form['season_name']
+    language = request.form['language'].lower().replace(' ', '')
+    links_str = request.form.get('links', "")
+    links = dict(link.split('=') for link in links_str.split(","))
 
-@aiohttp_jinja2.template('add_quality.html')
-async def add_quality(request):
-    if request.method == 'POST':
-        data = await request.post()  # Await the coroutine to get the form data
-        series_key = data['series_key'].strip().lower().replace(' ', '')
-        language = data['language'].strip().lower().replace(' ', '')
-        season = data['season'].strip().lower().replace(' ', '')
-        quality = data['quality'].strip()
-        link = data['link'].strip()
+    season_key = f"{series_key}-{language}-{season_name.lower().replace(' ', '')}"
 
-        season_key = f"{series_key}-{language}-{season}"
-        links_collection.update_one({"series_key": season_key}, {"$set": {f"links.{quality}": link}}, upsert=True)
+    series_collection.update_one(
+        {"key": series_key},
+        {"$set": {f"seasons.{season_name}": {"links": links}}},
+        upsert=True
+    )
 
-        return web.HTTPFound('/add_quality')
-    return {}
+    return redirect(url_for('view_series', series_name=series_key))
 
-app.router.add_get('/add_season', add_season)
-app.router.add_post('/add_season', add_season)
-app.router.add_get('/add_quality', add_quality)
-app.router.add_post('/add_quality', add_quality)
+@app.route('/view_series/<series_name>')
+def view_series(series_name):
+    series = series_collection.find_one({"title": series_name})
+    return render_template('view_series.html', series=series)
 
 if __name__ == '__main__':
-    web.run_app(app, host='0.0.0.0', port=8000)
+    app.run(debug=True)

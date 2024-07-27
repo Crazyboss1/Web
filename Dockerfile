@@ -8,4 +8,4 @@ EXPOSE 8000
 RUN pip install -U pip && pip install -U -r requirements.txt
 WORKDIR /app
 COPY . .
-CMD ["python3", "app:app"]
+CMD ["python3", "app.py"]

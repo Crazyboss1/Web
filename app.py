@@ -23,11 +23,19 @@ async def add_season(request):
         quality = data['quality'].strip()
         link = data['link'].strip()
 
-        season_key = f"{series_key}-{language}-{season.lower().replace(' ', '')}"
+        season_key = f"{series_key}-{language}-{season}"
 
-        # Adding the new season and link
-        links = {quality: link}
-        links_collection.update_one({"series_key": season_key}, {"$set": {"links": links}}, upsert=True)
+        # Adding or updating the season
+        season_data = links_collection.find_one({"series_key": season_key})
+        if not season_data:
+            # If season doesn't exist, create it
+            links = {quality: link}
+            links_collection.insert_one({"series_key": season_key, "links": links})
+        else:
+            # Update existing season
+            links = season_data.get('links', {})
+            links[quality] = link
+            links_collection.update_one({"series_key": season_key}, {"$set": {"links": links}})
 
         return web.HTTPFound('/add_season')
     return {}

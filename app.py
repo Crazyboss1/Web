@@ -3,7 +3,6 @@ import aiohttp_jinja2
 import jinja2
 import pymongo
 
-
 DATABASE_URI = "mongodb+srv://SpidySeries:SpidySeries@cluster0.xreosjj.mongodb.net/?retryWrites=true&w=majority"
 
 client = pymongo.MongoClient(DATABASE_URI)
@@ -17,7 +16,7 @@ aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 @aiohttp_jinja2.template('add_season.html')
 async def add_season(request):
     if request.method == 'POST':
-        data = request.post()
+        data = await request.post()  # Await the coroutine to get the form data
         series_key = data['series_key'].strip().lower().replace(' ', '')
         language = data['language'].strip().lower().replace(' ', '')
         season = data['season'].strip()
@@ -36,7 +35,7 @@ async def add_season(request):
 @aiohttp_jinja2.template('add_quality.html')
 async def add_quality(request):
     if request.method == 'POST':
-        data = request.post()
+        data = await request.post()  # Await the coroutine to get the form data
         series_key = data['series_key'].strip().lower().replace(' ', '')
         language = data['language'].strip().lower().replace(' ', '')
         season = data['season'].strip().lower().replace(' ', '')
@@ -56,4 +55,3 @@ app.router.add_post('/add_quality', add_quality)
 
 if __name__ == '__main__':
     web.run_app(app, host='0.0.0.0', port=8000)
-  
